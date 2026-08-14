@@ -15,7 +15,7 @@ class _HomePageState extends State<HomePage>{
         title: const Text("Home Page"),
       ),
       body: Center(
-        child: const Text("Home page"),
+      child: const Text("home page"),
       ),
     );
   }

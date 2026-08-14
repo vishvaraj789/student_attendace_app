@@ -32,12 +32,6 @@ class _RegisterPageState extends State<RegisterPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.person_add,
-                    size: 80,
-                  ),
-
-                  const SizedBox(height: 20),
 
                   const Text(
                     "Create Account",
@@ -46,6 +40,12 @@ class _RegisterPageState extends State<RegisterPage> {
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
+                  ),
+
+
+                  const Icon(
+                    Icons.person_add,
+                    size: 80,
                   ),
 
                   const SizedBox(height: 30),
@@ -104,7 +104,10 @@ class _RegisterPageState extends State<RegisterPage> {
                       Navigator.push(context,
                           MaterialPageRoute(builder: (context) => const HomePage()));
                     },
-                    child: const Text("Register"),
+                    style: ButtonStyle(
+                      backgroundColor: MaterialStateProperty.all(Colors.blue),
+                    ),
+                    child: const Text("Register", style:  TextStyle(color: Colors.white),),
                   ),
 
                   const SizedBox(height: 20),
