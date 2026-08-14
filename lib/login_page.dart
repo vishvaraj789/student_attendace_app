@@ -21,7 +21,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-      title: Text("login page"),),
+      title: Text("login page"),
+
+      ),
         body: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Center(
@@ -69,6 +71,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
 
                   const SizedBox(height: 20),
+
 
                   CheckboxListTile(
                       value: _value,

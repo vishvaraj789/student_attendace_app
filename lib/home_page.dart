@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:student_attendace_app/student_list_screen.dart';
 
 class HomePage  extends StatefulWidget{
   const HomePage({super.key});
@@ -13,9 +14,13 @@ class _HomePageState extends State<HomePage>{
     return Scaffold(
       appBar: AppBar(
         title: const Text("Home Page"),
+        centerTitle: true,
       ),
       body: Center(
-      child: const Text("home page"),
+      child: TextButton(onPressed: (){
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => StudentListScreen()));
+      }, child: const Text("Student list"))
       ),
     );
   }
