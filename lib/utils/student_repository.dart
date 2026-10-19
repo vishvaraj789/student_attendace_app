@@ -1,12 +1,10 @@
 import 'dart:convert';
-import 'package:student_attendace_app/utils/shared_preference.dart';
-
 import '../models/student.dart';
-import 'shared_preference.dart' hide SharedPrefsUtil;
+import 'cloud_sync.dart';
+import 'shared_preference.dart';
 
-/// Stores the student list on the device (SharedPreferences, as JSON).
-/// Swap the body of these methods for Firebase/SQLite later without
-/// touching the UI.
+/// Student list: kept on the device (SharedPreferences) and mirrored to
+/// Firestore (see CloudSync).
 class StudentRepository {
   static const _key = 'students';
 
@@ -29,6 +27,10 @@ class StudentRepository {
     await SharedPrefsUtil.setString(
       _key,
       jsonEncode(students.map((s) => s.toMap()).toList()),
+    );
+    await CloudSync.syncCollection(
+      'students',
+      students.map((s) => s.toMap()).toList(),
     );
   }
 

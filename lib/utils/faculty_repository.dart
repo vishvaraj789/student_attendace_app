@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../models/faculty.dart';
+import 'cloud_sync.dart';
 import 'shared_preference.dart';
 
 /// Faculty accounts, created and managed by the admin.
@@ -25,6 +26,10 @@ class FacultyRepository {
     await SharedPrefsUtil.setString(
       _key,
       jsonEncode(list.map((f) => f.toMap()).toList()),
+    );
+    await CloudSync.syncCollection(
+      'faculty',
+      list.map((f) => f.toMap()).toList(),
     );
   }
 

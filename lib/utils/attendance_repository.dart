@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'cloud_sync.dart';
 import 'shared_preference.dart';
 
 /// Attendance is stored as:
@@ -40,12 +41,14 @@ class AttendanceRepository {
     classData[dateKey(date)] = status;
     all[classId] = classData;
     await SharedPrefsUtil.setString(_key, jsonEncode(all));
+    await CloudSync.saveAttendance(classId, dateKey(date), status);
   }
 
   static Future<void> deleteClass(String classId) async {
     final all = _readAll();
     all.remove(classId);
     await SharedPrefsUtil.setString(_key, jsonEncode(all));
+    await CloudSync.deleteAttendanceForClass(classId);
   }
 
   /// Every day attendance was taken for a class, newest first:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../admin/admin_ui.dart';
 import '../models/class_room.dart';
 import '../models/student.dart';
 import '../utils/attendance_repository.dart';
@@ -14,7 +15,7 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  static const _accent = Color(0xFF6366F1);
+  static const _accent = AdminUi.blue;
   static const _presentColor = Color(0xFF10B981);
   static const _absentColor = Color(0xFFEF4444);
 
@@ -98,204 +99,241 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  Widget _toggle(String label, bool selected, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? color : AdminUi.line),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : AdminUi.muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _studentRow(Student s) {
+    final present = _status[s.id] ?? true;
+    final color = present ? _presentColor : _absentColor;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              s.name.isEmpty ? '?' : s.name[0].toUpperCase(),
+              style: TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w700, color: color),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(s.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: AdminUi.ink)),
+                const SizedBox(height: 2),
+                Text('Roll: ${s.rollNumber}',
+                    style:
+                    const TextStyle(fontSize: 12, color: AdminUi.muted)),
+              ],
+            ),
+          ),
+          _toggle('P', present, _presentColor, () => setState(() {
+            _status[s.id] = true;
+            _dirty = true;
+          })),
+          const SizedBox(width: 6),
+          _toggle('A', !present, _absentColor, () => setState(() {
+            _status[s.id] = false;
+            _dirty = true;
+          })),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.classRoom;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: Text(
-          c.name,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          [c.subject, c.divisionLabel]
-                              .where((e) => e.isNotEmpty)
-                              .join(' • '),
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _pickDate,
-                        icon: const Icon(Icons.calendar_today, size: 16),
-                        label: Text(_formatDate(_date)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _CountBox(
-                          label: 'Present',
-                          value: _presentCount,
-                          color: _presentColor),
-                      const SizedBox(width: 8),
-                      _CountBox(
-                          label: 'Absent',
-                          value: _absentCount,
-                          color: _absentColor),
-                      const SizedBox(width: 8),
-                      _CountBox(
-                          label: 'Total',
-                          value: _students.length,
-                          color: _accent),
-                    ],
-                  ),
-                  if (_alreadySaved) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      'Attendance already saved for this date. Changes will overwrite it.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (_students.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: () => _setAll(true),
-                    child: const Text('Mark all present'),
-                  ),
-                  TextButton(
-                    onPressed: () => _setAll(false),
-                    child: const Text('Mark all absent'),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: _students.isEmpty
-                ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  widget.classRoom.division.isEmpty
-                      ? 'No students yet.\nAdd students from the Student List first.'
-                      : 'No students in Division ${widget.classRoom.division} yet.\nAdd students to this division first.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                ),
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _students.length,
-              itemBuilder: (context, i) {
-                final s = _students[i];
-                final present = _status[s.id] ?? true;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+      backgroundColor: AdminUi.bg,
+      appBar: adminAppBar(c.name),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: (present ? _presentColor : _absentColor)
-                          .withValues(alpha: 0.35),
-                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AdminUi.line),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.name,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              [c.subject, c.divisionLabel]
+                                  .where((e) => e.isNotEmpty)
+                                  .join(' \u2022 '),
                               style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600),
+                                  color: AdminUi.muted, fontSize: 14),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Roll: ${s.rollNumber}',
-                              style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _pickDate,
+                            icon: const Icon(Icons.calendar_today_outlined,
+                                size: 16),
+                            label: Text(_formatDate(_date)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AdminUi.ink,
+                              side: const BorderSide(color: AdminUi.line),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          _CountBox(
+                              label: 'Present',
+                              value: _presentCount,
+                              color: _presentColor),
+                          const SizedBox(width: 8),
+                          _CountBox(
+                              label: 'Absent',
+                              value: _absentCount,
+                              color: _absentColor),
+                          const SizedBox(width: 8),
+                          _CountBox(
+                              label: 'Total',
+                              value: _students.length,
+                              color: _accent),
+                        ],
+                      ),
+                      if (_alreadySaved) ...[
+                        const SizedBox(height: 10),
+                        const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 15, color: AdminUi.muted),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Already saved for this date. Changes will overwrite it.',
+                                style: TextStyle(
+                                    fontSize: 12, color: AdminUi.muted),
+                              ),
                             ),
                           ],
                         ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (_students.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _setAll(true),
+                        icon: const Icon(Icons.done_all_rounded, size: 18),
+                        label: const Text('All present'),
+                        style: TextButton.styleFrom(
+                            foregroundColor: _presentColor),
                       ),
-                      ChoiceChip(
-                        label: const Text('P'),
-                        selected: present,
-                        selectedColor:
-                        _presentColor.withValues(alpha: 0.25),
-                        onSelected: (_) => setState(() {
-                          _status[s.id] = true;
-                          _dirty = true;
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('A'),
-                        selected: !present,
-                        selectedColor:
-                        _absentColor.withValues(alpha: 0.25),
-                        onSelected: (_) => setState(() {
-                          _status[s.id] = false;
-                          _dirty = true;
-                        }),
+                      TextButton.icon(
+                        onPressed: () => _setAll(false),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('All absent'),
+                        style: TextButton.styleFrom(
+                            foregroundColor: _absentColor),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
+                ),
+              Expanded(
+                child: _students.isEmpty
+                    ? AdminEmptyState(
+                  icon: Icons.school_outlined,
+                  title: 'No students yet',
+                  subtitle: widget.classRoom.division.isEmpty
+                      ? 'Add students from the Student List first.'
+                      : 'No students in Division ${widget.classRoom.division} yet. Add students to this division first.',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  itemCount: _students.length,
+                  itemBuilder: (context, i) => _studentRow(_students[i]),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
       bottomNavigationBar: _students.isEmpty
           ? null
-          : SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: (_dirty || !_alreadySaved) ? _save : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text(
-                _alreadySaved ? 'Update Attendance' : 'Save Attendance',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600),
+          : Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: AdminUi.line)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              height: 50,
+              child: FilledButton(
+                onPressed: (_dirty || !_alreadySaved) ? _save : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  _alreadySaved ? 'Update attendance' : 'Save attendance',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ),
@@ -320,18 +358,20 @@ class _CountBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
             Text(
               '$value',
               style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w700, color: color),
+                  fontSize: 21, fontWeight: FontWeight.w800, color: color),
             ),
+            const SizedBox(height: 2),
             Text(label, style: TextStyle(fontSize: 12, color: color)),
           ],
         ),

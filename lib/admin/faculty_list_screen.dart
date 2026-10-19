@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import '../faculty/student_list_screen.dart' show generatePassword;
 import '../models/faculty.dart';
 import '../utils/admin_auth.dart';
+import '../utils/class_repository.dart';
 import '../utils/faculty_repository.dart';
+import '../utils/login_share.dart';
+import 'admin_ui.dart';
 
 /// Admin screen: add, view, edit and delete faculty accounts.
 class FacultyListScreen extends StatefulWidget {
@@ -14,8 +17,6 @@ class FacultyListScreen extends StatefulWidget {
 }
 
 class _FacultyListScreenState extends State<FacultyListScreen> {
-  static const _accent = Color(0xFF6366F1);
-
   late List<Faculty> _faculty;
   String _query = '';
 
@@ -79,6 +80,16 @@ class _FacultyListScreenState extends State<FacultyListScreen> {
     );
   }
 
+  void _shareLogin(Faculty f) {
+    LoginShare.share(
+      context,
+      name: f.name,
+      role: 'Faculty',
+      email: f.email,
+      password: f.password,
+    );
+  }
+
   void _showCredentials(Faculty f) {
     showDialog(
       context: context,
@@ -91,27 +102,35 @@ class _FacultyListScreenState extends State<FacultyListScreen> {
           ));
         }
 
-        Widget row(String label, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+        Widget row(String label, String value, IconData icon) => Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AdminUi.line),
+          ),
           child: Row(
             children: [
+              Icon(icon, size: 20, color: AdminUi.muted),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey[600])),
+                        style: const TextStyle(
+                            fontSize: 12, color: AdminUi.muted)),
                     const SizedBox(height: 2),
                     SelectableText(value,
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                            fontSize: 15.5, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
               IconButton(
                 tooltip: 'Copy',
-                icon: const Icon(Icons.copy, size: 18),
+                icon: const Icon(Icons.copy_rounded, size: 18),
                 onPressed: () => copy(label, value),
               ),
             ],
@@ -119,19 +138,26 @@ class _FacultyListScreenState extends State<FacultyListScreen> {
         );
 
         return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text('${f.name}\'s login'),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: AdminDialogHeader(
+            icon: Icons.vpn_key_rounded,
+            title: 'Login details',
+            subtitle: f.name,
+            color: const Color(0xFFD97706),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              row('Email', f.email),
-              row('Password', f.password),
-              const SizedBox(height: 8),
-              Text(
-                'Give these to the faculty. They log in with the Faculty option.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              row('Email', f.email, Icons.mail_outline_rounded),
+              row('Password', f.password, Icons.lock_outline_rounded),
+              const SizedBox(height: 2),
+              const Text(
+                'Give these to the faculty. They sign in with the same login page.',
+                style: TextStyle(fontSize: 12.5, color: AdminUi.muted),
               ),
             ],
           ),
@@ -139,10 +165,20 @@ class _FacultyListScreenState extends State<FacultyListScreen> {
             TextButton(
               onPressed: () => copy('Login details',
                   'Email: ${f.email}\nPassword: ${f.password}'),
-              child: const Text('Copy both'),
+              child: const Text('Copy'),
             ),
-            TextButton(
+            TextButton.icon(
+              onPressed: () => _shareLogin(f),
+              icon: const Icon(Icons.share_rounded, size: 18),
+              label: const Text('Share'),
+            ),
+            FilledButton(
               onPressed: () => Navigator.pop(ctx),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminUi.blue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
               child: const Text('Close'),
             ),
           ],
@@ -151,207 +187,162 @@ class _FacultyListScreenState extends State<FacultyListScreen> {
     );
   }
 
-  void _delete(Faculty f) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Delete Faculty'),
-        content: Text(
-            'Delete ${f.name}? They will no longer be able to log in. This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => _faculty.removeWhere((x) => x.id == f.id));
-              FacultyRepository.saveAll(_faculty);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _delete(Faculty f) async {
+    final ok = await showAdminConfirm(
+      context,
+      title: 'Delete faculty?',
+      message:
+      'Delete ${f.name}? They will no longer be able to log in. This cannot be undone.',
     );
+    if (!ok || !mounted) return;
+    setState(() => _faculty.removeWhere((x) => x.id == f.id));
+    FacultyRepository.saveAll(_faculty);
+    await ClassRepository.unassignFaculty(f.id);
   }
 
   @override
   Widget build(BuildContext context) {
     final list = _filtered;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text('Faculty',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
+      backgroundColor: AdminUi.bg,
+      appBar: adminAppBar('Faculty'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showForm(),
+        backgroundColor: AdminUi.blue,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: const Text('Add faculty'),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              onChanged: (v) => setState(() => _query = v),
-              decoration: InputDecoration(
-                hintText: 'Search by name or email',
-                prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _accent, width: 2),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: AdminSearchField(
+                  hint: 'Search by name or email',
+                  onChanged: (v) => setState(() => _query = v),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: list.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.badge_outlined,
-                      size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    _query.isEmpty
-                        ? 'No faculty yet'
-                        : 'No faculty found',
-                    style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500),
-                  ),
-                  if (_query.isEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text('Tap + to create a faculty login',
-                        style: TextStyle(color: Colors.grey[500])),
-                  ],
-                ],
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final f = list[i];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [
-                            Color(0xFF10B981),
-                            Color(0xFF059669),
-                          ]),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Text(
-                            f.name.isEmpty
-                                ? '?'
-                                : f.name[0].toUpperCase(),
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700),
+              Expanded(
+                child: list.isEmpty
+                    ? AdminEmptyState(
+                  icon: Icons.badge_outlined,
+                  title: _query.isEmpty
+                      ? 'No faculty yet'
+                      : 'No faculty found',
+                  subtitle: _query.isEmpty
+                      ? 'Tap "Add faculty" to create a faculty login.'
+                      : 'Try a different name or email.',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                  itemCount: list.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return AdminListHeader(
+                          '${list.length} faculty member${list.length == 1 ? '' : 's'}');
+                    }
+                    final f = list[i - 1];
+                    return AdminCard(
+                      onTap: () => _showCredentials(f),
+                      child: Row(
+                        children: [
+                          AdminAvatar(
+                            text: f.name,
+                            colors: const [
+                              Color(0xFF10B981),
+                              Color(0xFF047857)
+                            ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(f.name,
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 4),
-                            Text(f.email,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey[600])),
-                          ],
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (v) {
-                          if (v == 'edit') _showForm(faculty: f);
-                          if (v == 'login') _showCredentials(f);
-                          if (v == 'delete') _delete(f);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Row(children: [
-                              Icon(Icons.edit,
-                                  size: 18, color: Colors.blue),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ]),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Text(f.name,
+                                    style: const TextStyle(
+                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AdminUi.ink)),
+                                const SizedBox(height: 3),
+                                Text(f.email,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AdminUi.muted)),
+                              ],
+                            ),
                           ),
-                          PopupMenuItem(
-                            value: 'login',
-                            child: Row(children: [
-                              Icon(Icons.vpn_key,
-                                  size: 18, color: Colors.orange),
-                              SizedBox(width: 8),
-                              Text('Login details'),
-                            ]),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(children: [
-                              Icon(Icons.delete,
-                                  size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Delete'),
-                            ]),
+                          PopupMenuButton<String>(
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius.circular(12)),
+                            onSelected: (v) {
+                              if (v == 'edit') _showForm(faculty: f);
+                              if (v == 'login') _showCredentials(f);
+                              if (v == 'share') _shareLogin(f);
+                              if (v == 'delete') _delete(f);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [
+                                  Icon(Icons.edit_outlined,
+                                      size: 19, color: AdminUi.blue),
+                                  SizedBox(width: 10),
+                                  Text('Edit'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'login',
+                                child: Row(children: [
+                                  Icon(Icons.vpn_key_outlined,
+                                      size: 19,
+                                      color: Color(0xFFD97706)),
+                                  SizedBox(width: 10),
+                                  Text('Login details'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'share',
+                                child: Row(children: [
+                                  Icon(Icons.share_outlined,
+                                      size: 19,
+                                      color: Color(0xFF059669)),
+                                  SizedBox(width: 10),
+                                  Text('Share login'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(children: [
+                                  Icon(Icons.delete_outline_rounded,
+                                      size: 19,
+                                      color: AdminUi.danger),
+                                  SizedBox(width: 10),
+                                  Text('Delete'),
+                                ]),
+                              ),
+                            ],
+                            child: const Padding(
+                              padding: EdgeInsets.all(6),
+                              child: Icon(Icons.more_vert_rounded,
+                                  color: AdminUi.muted),
+                            ),
                           ),
                         ],
-                        child:
-                        Icon(Icons.more_vert, color: Colors.grey[600]),
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showForm(),
-        backgroundColor: _accent,
-        child: const Icon(Icons.add),
+        ),
       ),
     );
   }
@@ -370,8 +361,6 @@ class _FacultyDialog extends StatefulWidget {
 }
 
 class _FacultyDialogState extends State<_FacultyDialog> {
-  static const _accent = Color(0xFF6366F1);
-
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _email;
@@ -400,130 +389,134 @@ class _FacultyDialogState extends State<_FacultyDialog> {
   }
 
   InputDecoration _dec(String label, IconData icon, {Widget? suffix}) =>
-      InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        suffixIcon: suffix,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _accent, width: 2),
-        ),
-      );
+      adminInputDecoration(label, icon, suffix: suffix);
 
   @override
   Widget build(BuildContext context) {
     final editing = widget.faculty != null;
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(editing ? 'Edit Faculty' : 'Add Faculty',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _name,
-                textCapitalization: TextCapitalization.words,
-                decoration: _dec('Name', Icons.person),
-                validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Name is required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _dec('Email', Icons.email),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Email is required';
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                      .hasMatch(v.trim())) {
-                    return 'Enter a valid email';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _password,
-                obscureText: _obscure,
-                decoration: _dec(
-                  'Login Password',
-                  Icons.lock,
-                  suffix: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'Show / hide',
-                        icon: Icon(_obscure
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                      IconButton(
-                        tooltip: 'Generate password',
-                        icon: const Icon(Icons.autorenew),
-                        onPressed: () => setState(
-                                () => _password.text = generatePassword()),
-                      ),
-                    ],
-                  ),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AdminDialogHeader(
+                  icon: editing
+                      ? Icons.edit_outlined
+                      : Icons.person_add_alt_1_rounded,
+                  title: editing ? 'Edit faculty' : 'Add faculty',
+                  subtitle: editing
+                      ? 'Update the details and login'
+                      : 'Create a faculty login',
                 ),
-                validator: (v) => v == null || v.trim().length < 6
-                    ? 'Password must be at least 6 characters'
-                    : null,
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!,
-                    style: const TextStyle(color: Colors.red, fontSize: 13)),
-              ],
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (!_formKey.currentState!.validate()) return;
-                      final error = widget.onSave(
-                        _name.text.trim(),
-                        _email.text.trim(),
-                        _password.text.trim(),
-                      );
-                      if (error != null) {
-                        setState(() => _error = error);
-                        return;
-                      }
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(editing
-                            ? 'Faculty updated'
-                            : 'Faculty added'),
-                        duration: const Duration(seconds: 2),
-                      ));
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _accent,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
+                const SizedBox(height: 22),
+                TextFormField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: _dec('Name', Icons.person),
+                  validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Name is required' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _dec('Email', Icons.email),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                        .hasMatch(v.trim())) {
+                      return 'Enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _password,
+                  obscureText: _obscure,
+                  decoration: _dec(
+                    'Login Password',
+                    Icons.lock,
+                    suffix: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Show / hide',
+                          icon: Icon(_obscure
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                        IconButton(
+                          tooltip: 'Generate password',
+                          icon: const Icon(Icons.autorenew),
+                          onPressed: () => setState(
+                                  () => _password.text = generatePassword()),
+                        ),
+                      ],
                     ),
-                    child: Text(editing ? 'Update' : 'Add',
-                        style: const TextStyle(color: Colors.white)),
                   ),
+                  validator: (v) => v == null || v.trim().length < 6
+                      ? 'Password must be at least 6 characters'
+                      : null,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13)),
                 ],
-              ),
-            ],
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: () {
+                        if (!_formKey.currentState!.validate()) return;
+                        final error = widget.onSave(
+                          _name.text.trim(),
+                          _email.text.trim(),
+                          _password.text.trim(),
+                        );
+                        if (error != null) {
+                          setState(() => _error = error);
+                          return;
+                        }
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(editing
+                              ? 'Faculty updated'
+                              : 'Faculty added'),
+                          duration: const Duration(seconds: 2),
+                        ));
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AdminUi.blue,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 26, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(editing ? 'Update' : 'Add faculty'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

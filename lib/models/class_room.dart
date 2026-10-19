@@ -11,6 +11,9 @@ class ClassRoom {
   final TimeOfDay startTime;
   final DateTime createdAt;
 
+  /// Faculty this class is assigned to. Empty = not assigned yet.
+  final String facultyId;
+
   ClassRoom({
     required this.id,
     required this.name,
@@ -20,6 +23,7 @@ class ClassRoom {
     required this.days,
     required this.startTime,
     DateTime? createdAt,
+    this.facultyId = '',
   }) : createdAt = createdAt ?? DateTime.now();
 
   String get divisionLabel => division.isEmpty ? 'All divisions' : 'Div $division';
@@ -42,6 +46,7 @@ class ClassRoom {
         minute: map['minute'] as int? ?? 0,
       ),
       createdAt: DateTime.tryParse(map['createdAt'] as String? ?? ''),
+      facultyId: map['facultyId'] as String? ?? '',
     );
   }
 
@@ -55,5 +60,18 @@ class ClassRoom {
     'hour': startTime.hour,
     'minute': startTime.minute,
     'createdAt': createdAt.toIso8601String(),
+    'facultyId': facultyId,
   };
+
+  ClassRoom copyWith({String? facultyId}) => ClassRoom(
+    id: id,
+    name: name,
+    subject: subject,
+    section: section,
+    division: division,
+    days: days,
+    startTime: startTime,
+    createdAt: createdAt,
+    facultyId: facultyId ?? this.facultyId,
+  );
 }

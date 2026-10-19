@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import '../faculty/attendance_report_screen.dart';
 import '../faculty/student_list_screen.dart';
+import '../faculty/take_attendance_screen.dart';
 import '../login_page.dart';
 import '../utils/admin_auth.dart';
 import '../utils/class_repository.dart';
 import '../utils/faculty_repository.dart';
 import '../utils/student_repository.dart';
+import 'admin_settings_screen.dart';
+import 'admin_ui.dart';
+import 'class_list_screen.dart';
 import 'faculty_list_screen.dart';
 
 /// Admin panel: manage faculty and students (and their logins).
@@ -16,7 +21,10 @@ class AdminHome extends StatefulWidget {
 }
 
 class _AdminHomeState extends State<AdminHome> {
-  static const _accent = Color(0xFF6366F1);
+  static const _navy = Color(0xFF0F1F3D);
+  static const _ink = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+  static const _bg = Color(0xFFF3F5F9);
 
   int _facultyCount = FacultyRepository.getAll().length;
   int _studentCount = StudentRepository.count();
@@ -35,30 +43,18 @@ class _AdminHomeState extends State<AdminHome> {
     if (mounted) _refresh();
   }
 
-  void _logout() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                    (route) => false,
-              );
-            },
-            child: const Text('Log out', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _logout() async {
+    final ok = await showAdminConfirm(
+      context,
+      title: 'Log out?',
+      message: 'Are you sure you want to log out of the admin panel?',
+      confirmLabel: 'Log out',
+    );
+    if (!ok || !mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
     );
   }
 
@@ -71,42 +67,47 @@ class _AdminHomeState extends State<AdminHome> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Change admin password'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const AdminDialogHeader(
+          icon: Icons.lock_reset_rounded,
+          title: 'Change password',
+          subtitle: 'Update the admin password',
+          color: AdminUi.danger,
+        ),
         content: Form(
           key: formKey,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: current,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Current password',
-                      border: OutlineInputBorder()),
+                  decoration: adminInputDecoration(
+                      'Current password', Icons.lock_outline_rounded),
                   validator: (v) => v == null || !AdminAuth.isCurrentPassword(v)
                       ? 'Current password is wrong'
                       : null,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: next,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: 'New password',
-                      border: OutlineInputBorder()),
+                  decoration: adminInputDecoration(
+                      'New password', Icons.key_rounded),
                   validator: (v) => v == null || v.length < 6
                       ? 'At least 6 characters'
                       : null,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: confirm,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Confirm new password',
-                      border: OutlineInputBorder()),
+                  decoration: adminInputDecoration(
+                      'Confirm new password', Icons.verified_user_outlined),
                   validator: (v) =>
                   v != next.text ? 'Passwords do not match' : null,
                 ),
@@ -114,12 +115,13 @@ class _AdminHomeState extends State<AdminHome> {
             ),
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               await AdminAuth.changePassword(next.text);
@@ -130,7 +132,124 @@ class _AdminHomeState extends State<AdminHome> {
                 const SnackBar(content: Text('Admin password updated')),
               );
             },
+            style: FilledButton.styleFrom(
+              backgroundColor: AdminUi.blue,
+              padding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  String _today() {
+    const days = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday'
+    ];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final d = DateTime.now();
+    return '${days[d.weekday - 1]}, ${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Widget _banner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F1F3D), Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1D4ED8).withValues(alpha: 0.30),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: const Icon(Icons.admin_panel_settings_rounded,
+                color: Colors.white, size: 30),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _greeting(),
+                  style: const TextStyle(
+                      fontSize: 13.5, color: Color(0xFFBFDBFE)),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Administrator',
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  AdminAuth.email,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFFDBEAFE)),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today_rounded,
+                          size: 12, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        _today(),
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -140,179 +259,254 @@ class _AdminHomeState extends State<AdminHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text(
-          'Admin Panel',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-        ),
-        centerTitle: false,
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: _ink,
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _navy,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(Icons.fact_check_outlined,
+                  color: Colors.white, size: 19),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Admin Panel',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Log out',
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded, color: _muted),
             onPressed: _logout,
           ),
+          const SizedBox(width: 8),
         ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFFE5E7EB)),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Welcome, Admin',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Create logins for faculty and students',
-              style: TextStyle(color: Colors.grey[600], fontSize: 15),
-            ),
-            const SizedBox(height: 24),
-            Row(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Stat(
-                    label: 'Faculty',
-                    value: _facultyCount,
-                    color: const Color(0xFF10B981)),
-                const SizedBox(width: 12),
-                _Stat(label: 'Students', value: _studentCount, color: _accent),
-                const SizedBox(width: 12),
-                _Stat(
-                    label: 'Classes',
-                    value: _classCount,
-                    color: const Color(0xFFF59E0B)),
+                _banner(),
+                const SizedBox(height: 24),
+                const Text(
+                  'Quick access',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final cols = c.maxWidth >= 700 ? 3 : 2;
+                    return GridView.count(
+                      crossAxisCount: cols,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: 1.0,
+                      children: [
+                        _Tile(
+                          icon: Icons.badge_rounded,
+                          title: 'Faculty',
+                          count: _facultyCount,
+                          colors: const [Color(0xFF10B981), Color(0xFF047857)],
+                          onTap: () => _open(const FacultyListScreen()),
+                        ),
+                        _Tile(
+                          icon: Icons.school_rounded,
+                          title: 'Students',
+                          count: _studentCount,
+                          colors: const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                          onTap: () => _open(const StudentListScreen()),
+                        ),
+                        _Tile(
+                          icon: Icons.class_rounded,
+                          title: 'Classes',
+                          count: _classCount,
+                          colors: const [Color(0xFFF59E0B), Color(0xFFD97706)],
+                          onTap: () => _open(const ClassListScreen()),
+                        ),
+                        _Tile(
+                          icon: Icons.fact_check_rounded,
+                          title: 'Attendance',
+                          caption: 'Take or edit attendance',
+                          colors: const [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                          onTap: () => _open(const TakeAttendanceScreen()),
+                        ),
+                        _Tile(
+                          icon: Icons.insights_rounded,
+                          title: 'Reports',
+                          caption: 'Daily, monthly, student-wise',
+                          colors: const [Color(0xFFEC4899), Color(0xFFBE185D)],
+                          onTap: () => _open(const AttendanceReportScreen()),
+                        ),
+                        _Tile(
+                          icon: Icons.settings_rounded,
+                          title: 'Settings',
+                          caption: 'Password, sync, log out',
+                          colors: const [Color(0xFF475569), Color(0xFF1E293B)],
+                          onTap: () => _open(AdminSettingsScreen(
+                            onChangePassword: _changePassword,
+                            onLogout: _logout,
+                          )),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
-            const SizedBox(height: 28),
-            Text(
-              'Manage',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            _Action(
-              icon: Icons.badge,
-              color: const Color(0xFF10B981),
-              title: 'Faculty',
-              subtitle: 'Add faculty and give them an email and password',
-              onTap: () => _open(const FacultyListScreen()),
-            ),
-            _Action(
-              icon: Icons.school,
-              color: _accent,
-              title: 'Students',
-              subtitle: 'Add students and give them an email and password',
-              onTap: () => _open(const StudentListScreen()),
-            ),
-            _Action(
-              icon: Icons.lock_reset,
-              color: const Color(0xFFEF4444),
-              title: 'Change admin password',
-              subtitle: 'Update the password for ${AdminAuth.email}',
-              onTap: _changePassword,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final int value;
-  final Color color;
-
-  const _Stat({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            Text('$value',
-                style: TextStyle(
-                    fontSize: 26, fontWeight: FontWeight.w800, color: color)),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 13, color: color)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Action extends StatelessWidget {
+/// Big colorful button used on the admin home grid.
+class _Tile extends StatelessWidget {
   final IconData icon;
-  final Color color;
   final String title;
-  final String subtitle;
+  final int? count;
+  final String? caption;
+  final List<Color> colors;
   final VoidCallback onTap;
 
-  const _Action({
+  const _Tile({
     required this.icon,
-    required this.color,
     required this.title,
-    required this.subtitle,
+    required this.colors,
     required this.onTap,
+    this.count,
+    this.caption,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
-        elevation: 1,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: colors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: colors.last.withValues(alpha: 0.32),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                // soft decorative circles
+                Positioned(
+                  right: -26,
+                  top: -26,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
                   ),
-                  child: Icon(icon, color: color),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
+                Positioned(
+                  right: 14,
+                  bottom: -34,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 28),
+                      ),
+                      const Spacer(),
+                      if (count != null)
+                        Text(
+                          '$count',
                           style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          style:
-                          TextStyle(fontSize: 13, color: Colors.grey[600])),
+                            fontSize: 34,
+                            height: 1,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      if (count != null) const SizedBox(height: 4),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (caption != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          caption!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.25,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: Colors.grey[500]),
               ],
             ),
           ),

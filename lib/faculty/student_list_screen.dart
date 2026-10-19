@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../admin/admin_ui.dart';
 import '../models/student.dart';
+import '../utils/login_share.dart';
 import '../utils/student_repository.dart';
 
 /// Random 8-character password (no look-alike characters like 0/O, 1/l).
@@ -157,6 +159,16 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
+  void _shareLogin(Student student) {
+    LoginShare.share(
+      context,
+      name: student.name,
+      role: 'Student',
+      email: student.email,
+      password: student.password,
+    );
+  }
+
   void _showCredentials(Student student) {
     showDialog(
       context: context,
@@ -173,27 +185,35 @@ class _StudentListScreenState extends State<StudentListScreen> {
           );
         }
 
-        Widget row(String label, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+        Widget row(String label, String value, IconData icon) => Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AdminUi.line),
+          ),
           child: Row(
             children: [
+              Icon(icon, size: 20, color: AdminUi.muted),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey[600])),
+                        style: const TextStyle(
+                            fontSize: 12, color: AdminUi.muted)),
                     const SizedBox(height: 2),
                     SelectableText(value,
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                            fontSize: 15.5, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
               IconButton(
                 tooltip: 'Copy',
-                icon: const Icon(Icons.copy, size: 18),
+                icon: const Icon(Icons.copy_rounded, size: 18),
                 onPressed: () => copy(label, value),
               ),
             ],
@@ -201,25 +221,34 @@ class _StudentListScreenState extends State<StudentListScreen> {
         );
 
         return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text('${student.name}\'s login'),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: AdminDialogHeader(
+            icon: Icons.vpn_key_rounded,
+            title: 'Login details',
+            subtitle: student.name,
+            color: const Color(0xFFD97706),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              row('Email', student.email),
+              row('Email', student.email, Icons.mail_outline_rounded),
               if (hasPassword)
-                row('Password', student.password)
+                row('Password', student.password, Icons.lock_outline_rounded)
               else
-                Text(
-                  'No password set yet. Edit this student to set one.',
-                  style: TextStyle(color: Colors.red[400]),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    'No password set yet. Edit this student to set one.',
+                    style: TextStyle(color: AdminUi.danger, fontSize: 13),
+                  ),
                 ),
-              const SizedBox(height: 8),
-              Text(
-                'Give these to the student. They log in with the Student option.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              const Text(
+                'Give these to the student. They sign in on the login page.',
+                style: TextStyle(fontSize: 12.5, color: AdminUi.muted),
               ),
             ],
           ),
@@ -228,10 +257,20 @@ class _StudentListScreenState extends State<StudentListScreen> {
               TextButton(
                 onPressed: () => copy('Login details',
                     'Email: ${student.email}\nPassword: ${student.password}'),
-                child: const Text('Copy both'),
+                child: const Text('Copy'),
               ),
-            TextButton(
+            TextButton.icon(
+              onPressed: () => _shareLogin(student),
+              icon: const Icon(Icons.share_rounded, size: 18),
+              label: const Text('Share'),
+            ),
+            FilledButton(
               onPressed: () => Navigator.pop(ctx),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminUi.blue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
               child: const Text('Close'),
             ),
           ],
@@ -240,39 +279,21 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
-  void _deleteStudent(String id) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Delete Student'),
-        content: const Text(
-            'Are you sure you want to delete this student? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                students.removeWhere((s) => s.id == id);
-              });
-              StudentRepository.saveAll(students);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Student deleted successfully'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
+  Future<void> _deleteStudent(String id) async {
+    final ok = await showAdminConfirm(
+      context,
+      title: 'Delete student?',
+      message: 'Are you sure you want to delete this student? This cannot be undone.',
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      students.removeWhere((s) => s.id == id);
+    });
+    StudentRepository.saveAll(students);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Student deleted successfully'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -298,50 +319,50 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
         if (item is String) {
           final n = counts[item] ?? 0;
           return Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 10),
+            padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
             child: Row(
               children: [
                 Container(
-                  width: 8,
-                  height: 8,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     color: item == 'Unassigned'
-                        ? Colors.grey
-                        : const Color(0xFF10B981),
-                    shape: BoxShape.circle,
+                        ? AdminUi.muted
+                        : AdminUi.navy,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    item == 'Unassigned' ? 'Unassigned' : 'Division $item',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  item == 'Unassigned' ? 'Unassigned' : 'Division $item',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Text(
                   '$n student${n == 1 ? '' : 's'}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  style: const TextStyle(fontSize: 12.5, color: AdminUi.muted),
                 ),
               ],
             ),
           );
         }
         final student = item as Student;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: StudentCard(
-            student: student,
-            onEdit: () => _showEditStudentDialog(student),
-            onCredentials: () => _showCredentials(student),
-            onDelete: () => _deleteStudent(student.id),
-          ),
+        return StudentCard(
+          student: student,
+          onEdit: () => _showEditStudentDialog(student),
+          onCredentials: () => _showCredentials(student),
+          onShare: () => _shareLogin(student),
+          onDelete: () => _deleteStudent(student.id),
         );
       },
     );
@@ -349,337 +370,200 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final list = filteredStudents;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          'Students',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
+      backgroundColor: AdminUi.bg,
+      appBar: adminAppBar('Students'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddStudentDialog,
+        backgroundColor: AdminUi.blue,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: const Text('Add student'),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: AdminSearchField(
+                  hint: 'Search by name, roll number or email',
+                  onChanged: (value) => setState(() => searchQuery = value),
+                ),
+              ),
+              if (students.isNotEmpty)
+                SizedBox(
+                  height: 42,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      for (final option in _filterOptions)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(
+                              option == 'All'
+                                  ? 'All (${_countFor(option)})'
+                                  : option == 'Unassigned'
+                                  ? 'Unassigned (${_countFor(option)})'
+                                  : 'Div $option (${_countFor(option)})',
+                            ),
+                            selected: _activeFilter == option,
+                            showCheckmark: false,
+                            backgroundColor: Colors.white,
+                            selectedColor: AdminUi.blue,
+                            side: BorderSide(
+                              color: _activeFilter == option
+                                  ? AdminUi.blue
+                                  : AdminUi.line,
+                            ),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            labelStyle: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _activeFilter == option
+                                  ? Colors.white
+                                  : AdminUi.ink,
+                            ),
+                            onSelected: (_) =>
+                                setState(() => _divisionFilter = option),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: list.isEmpty
+                    ? AdminEmptyState(
+                  icon: Icons.school_outlined,
+                  title: searchQuery.isEmpty
+                      ? 'No students yet'
+                      : 'No students found',
+                  subtitle: searchQuery.isEmpty
+                      ? 'Tap "Add student" to get started.'
+                      : 'Try a different search term.',
+                )
+                    : _buildGroupedList(),
+              ),
+            ],
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-      ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              onChanged: (value) {
-                setState(() => searchQuery = value);
-              },
-              decoration: InputDecoration(
-                hintText: 'Search by name, roll number, or email',
-                hintStyle: TextStyle(color: Colors.grey[500]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-                suffixIcon: searchQuery.isNotEmpty
-                    ? GestureDetector(
-                  onTap: () {
-                    setState(() => searchQuery = '');
-                  },
-                  child: Icon(Icons.close, color: Colors.grey[600]),
-                )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: Color(0xFF6366F1),
-                    width: 2,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-            ),
-          ),
-          // Division filter
-          if (students.isNotEmpty)
-            SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  for (final option in _filterOptions)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(
-                          option == 'All'
-                              ? 'All (${_countFor(option)})'
-                              : option == 'Unassigned'
-                              ? 'Unassigned (${_countFor(option)})'
-                              : 'Div $option (${_countFor(option)})',
-                        ),
-                        selected: _activeFilter == option,
-                        selectedColor:
-                        const Color(0xFF6366F1).withValues(alpha: 0.18),
-                        onSelected: (_) =>
-                            setState(() => _divisionFilter = option),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 8),
-          // Student List
-          Expanded(
-            child: filteredStudents.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.people_outline,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    searchQuery.isEmpty
-                        ? 'No students yet'
-                        : 'No students found',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    searchQuery.isEmpty
-                        ? 'Add a new student to get started'
-                        : 'Try a different search term',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
-            )
-                : _buildGroupedList(),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddStudentDialog,
-        backgroundColor: const Color(0xFF6366F1),
-        child: const Icon(Icons.add),
       ),
     );
   }
 }
 
-class StudentCard extends StatefulWidget {
+class StudentCard extends StatelessWidget {
   final Student student;
   final VoidCallback onEdit;
   final VoidCallback onCredentials;
+  final VoidCallback onShare;
   final VoidCallback onDelete;
 
   const StudentCard({
     required this.student,
     required this.onEdit,
     required this.onCredentials,
+    required this.onShare,
     required this.onDelete,
     super.key,
   });
 
-  @override
-  State<StudentCard> createState() => _StudentCardState();
-}
+  Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Text(text,
+        style: TextStyle(
+            fontSize: 11.5, fontWeight: FontWeight.w600, color: color)),
+  );
 
-class _StudentCardState extends State<StudentCard> {
-  bool _isHovered = false;
+  PopupMenuItem<String> _item(
+      String value, IconData icon, Color color, String label) =>
+      PopupMenuItem(
+        value: value,
+        child: Row(children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(width: 10),
+          Text(label),
+        ]),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: _isHovered ? 0.1 : 0.06),
-              blurRadius: _isHovered ? 12 : 8,
-              offset: Offset(0, _isHovered ? 4 : 2),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Avatar
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF6366F1),
-                      const Color(0xFF8B5CF6),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    widget.student.name[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
+    return AdminCard(
+      onTap: onCredentials,
+      child: Row(
+        children: [
+          AdminAvatar(
+            text: student.name,
+            colors: const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600,
+                    color: AdminUi.ink,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              // Student Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      widget.student.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Roll: ${widget.student.rollNumber}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF6366F1),
-                            ),
-                          ),
-                        ),
-                        if (widget.student.division.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981)
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Div ${widget.student.division}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF059669),
-                              ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            widget.student.email,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                    _tag('Roll: ${student.rollNumber}', AdminUi.blue),
+                    if (student.division.isNotEmpty)
+                      _tag('Div ${student.division}', const Color(0xFF059669)),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Action Buttons
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    widget.onEdit();
-                  } else if (value == 'credentials') {
-                    widget.onCredentials();
-                  } else if (value == 'delete') {
-                    widget.onDelete();
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, size: 18, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'credentials',
-                    child: Row(
-                      children: [
-                        Icon(Icons.vpn_key, size: 18, color: Colors.orange),
-                        SizedBox(width: 8),
-                        Text('Login details'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 18, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete'),
-                      ],
-                    ),
-                  ),
-                ],
-                child: Icon(
-                  Icons.more_vert,
-                  color: Colors.grey[600],
+                const SizedBox(height: 5),
+                Text(
+                  student.email,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, color: AdminUi.muted),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          PopupMenuButton<String>(
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (value) {
+              if (value == 'edit') onEdit();
+              if (value == 'credentials') onCredentials();
+              if (value == 'share') onShare();
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (_) => [
+              _item('edit', Icons.edit_outlined, AdminUi.blue, 'Edit'),
+              _item('credentials', Icons.vpn_key_outlined,
+                  const Color(0xFFD97706), 'Login details'),
+              _item('share', Icons.share_outlined, const Color(0xFF059669),
+                  'Share login'),
+              _item('delete', Icons.delete_outline_rounded, AdminUi.danger,
+                  'Delete'),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.more_vert_rounded, color: AdminUi.muted),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -747,258 +631,213 @@ class _AddEditStudentDialogState extends State<AddEditStudentDialog> {
     super.dispose();
   }
 
+  InputDecoration _dec(String label, String hint, IconData icon,
+      {Widget? suffix, String? helper}) =>
+      adminInputDecoration(label, icon, suffix: suffix).copyWith(
+        hintText: hint,
+        helperText: helper,
+        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+      );
+
   @override
   Widget build(BuildContext context) {
+    final editing = widget.student != null;
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.student == null ? 'Add Student' : 'Edit Student',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AdminDialogHeader(
+                    icon: editing
+                        ? Icons.edit_outlined
+                        : Icons.person_add_alt_1_rounded,
+                    title: editing ? 'Edit student' : 'Add student',
+                    subtitle: editing
+                        ? 'Update the details and login'
+                        : 'Create a student login',
                   ),
-                ),
-                const SizedBox(height: 20),
-                // Name Field
-                TextFormField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Name',
-                    hintText: 'Enter student name',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 22),
+                  TextFormField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: _dec('Name', 'Enter student name',
+                        Icons.person_outline_rounded),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Name is required';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: rollNumberController,
+                    decoration: _dec('Roll number', 'Enter roll number',
+                        Icons.badge_outlined),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Roll number is required';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: divisionController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: _dec('Division', 'e.g. A, B, 10-A',
+                        Icons.groups_outlined),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Division is required';
+                      }
+                      if (value.trim().length > 10) {
+                        return 'Keep the division short (max 10 characters)';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (widget.existingDivisions.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        for (final d in widget.existingDivisions)
+                          ActionChip(
+                            label: Text('Div $d'),
+                            backgroundColor: const Color(0xFFF3F4F6),
+                            side: const BorderSide(color: AdminUi.line),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            onPressed: () =>
+                                setState(() => divisionController.text = d),
+                          ),
+                      ],
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF6366F1),
-                        width: 2,
+                  ],
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: _dec('Email', 'Enter email address',
+                        Icons.mail_outline_rounded),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Email is required';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value.trim())) {
+                        return 'Enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: _dec(
+                      'Login password',
+                      'At least 6 characters',
+                      Icons.lock_outline_rounded,
+                      helper: 'Give this email and password to the student',
+                      suffix: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Show / hide',
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                          ),
+                          IconButton(
+                            tooltip: 'Generate password',
+                            icon: const Icon(Icons.autorenew_rounded,
+                                size: 20),
+                            onPressed: () => setState(() {
+                              passwordController.text = generatePassword();
+                            }),
+                          ),
+                        ],
                       ),
                     ),
-                    prefixIcon: const Icon(Icons.person),
+                    validator: (value) {
+                      if (value == null || value.trim().length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Name is required';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Roll Number Field
-                TextFormField(
-                  controller: rollNumberController,
-                  decoration: InputDecoration(
-                    labelText: 'Roll Number',
-                    hintText: 'Enter roll number',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF6366F1),
-                        width: 2,
-                      ),
-                    ),
-                    prefixIcon: const Icon(Icons.badge),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Roll number is required';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Division Field
-                TextFormField(
-                  controller: divisionController,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    labelText: 'Division',
-                    hintText: 'e.g. A, B, 10-A',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF6366F1),
-                        width: 2,
-                      ),
-                    ),
-                    prefixIcon: const Icon(Icons.groups),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Division is required';
-                    }
-                    if (value.trim().length > 10) {
-                      return 'Keep the division short (max 10 characters)';
-                    }
-                    return null;
-                  },
-                ),
-                if (widget.existingDivisions.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_error!,
+                        style: const TextStyle(
+                            color: AdminUi.danger, fontSize: 13)),
+                  ],
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      for (final d in widget.existingDivisions)
-                        ActionChip(
-                          label: Text('Div $d'),
-                          onPressed: () =>
-                              setState(() => divisionController.text = d),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: () {
+                          if (formKey.currentState!.validate()) {
+                            final error = widget.onSave(
+                              nameController.text.trim(),
+                              emailController.text.trim(),
+                              rollNumberController.text.trim(),
+                              passwordController.text.trim(),
+                              divisionController.text.trim().toUpperCase(),
+                            );
+                            if (error != null) {
+                              setState(() => _error = error);
+                              return;
+                            }
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(editing
+                                    ? 'Student updated successfully'
+                                    : 'Student added successfully'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AdminUi.blue,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 26, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
+                        child: Text(editing ? 'Update' : 'Add student'),
+                      ),
                     ],
                   ),
                 ],
-                const SizedBox(height: 16),
-                // Email Field
-                TextFormField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter email address',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF6366F1),
-                        width: 2,
-                      ),
-                    ),
-                    prefixIcon: const Icon(Icons.email),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Email is required';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value.trim())) {
-                      return 'Enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Password Field (given to the student for login)
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Login Password',
-                    hintText: 'At least 6 characters',
-                    helperText: 'Give this email and password to the student',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF6366F1),
-                        width: 2,
-                      ),
-                    ),
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Show / hide',
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility),
-                          onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword),
-                        ),
-                        IconButton(
-                          tooltip: 'Generate password',
-                          icon: const Icon(Icons.autorenew),
-                          onPressed: () => setState(() {
-                            passwordController.text = generatePassword();
-                          }),
-                        ),
-                      ],
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13)),
-                ],
-                const SizedBox(height: 24),
-                // Action Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          final error = widget.onSave(
-                            nameController.text.trim(),
-                            emailController.text.trim(),
-                            rollNumberController.text.trim(),
-                            passwordController.text.trim(),
-                            divisionController.text.trim().toUpperCase(),
-                          );
-                          if (error != null) {
-                            setState(() => _error = error);
-                            return;
-                          }
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(widget.student == null
-                                  ? 'Student added successfully'
-                                  : 'Student updated successfully'),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: Text(
-                        widget.student == null ? 'Add' : 'Update',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
